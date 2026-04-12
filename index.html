@@ -1,328 +1,160 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>虞美人 · 自然粒子花 | 手势控制</title>
-    <!-- P5.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
-    <!-- MediaPipe Hands -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <style>
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: radial-gradient(circle at 30% 20%, #1a1a2e, #0a0a12);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Segoe UI', 'Georgia', serif;
-        }
-        .container {
-            text-align: center;
-            padding: 15px;
-        }
-        canvas {
-            border-radius: 20px;
-            box-shadow: 0 0 40px rgba(180, 70, 120, 0.4);
-            display: block;
-            margin: 0 auto;
-        }
-        .info {
-            background: rgba(0,0,0,0.55);
-            backdrop-filter: blur(10px);
-            border-radius: 60px;
-            padding: 10px 24px;
-            margin-top: 18px;
-            display: inline-block;
-            color: #f0e6ff;
-            font-size: 14px;
-        }
-        .gesture-status {
-            font-weight: bold;
-            color: #ffaa66;
-        }
-        button {
-            background: #c44569;
-            border: none;
-            color: white;
-            padding: 6px 20px;
-            border-radius: 40px;
-            margin-left: 12px;
-            cursor: pointer;
-        }
-        .particle-count {
-            font-size: 11px;
-            margin-top: 6px;
-            opacity: 0.8;
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div id="canvasContainer"></div>
-    <div class="info">
-        <span class="gesture-status" id="gestureText">🌱 等待手势</span>
-        <button id="resetBtn">重置花姿</button>
-        <div class="particle-count" id="particleCountDisplay">⚘ 粒子计算中...</div>
-        <div>✋ 张开 → 花瓣舒展 &nbsp;| ✊ 握拳 → 花瓣微合 &nbsp;| 🤏 捏合 → 花粉流光</div>
-        <div>🖐️ 手掌移动 → 花朵轻轻转头</div>
-    </div>
-</div>
+// ============================================================
+// 第三周作业：创意编程作业展 · 黑白极光动态海报
+// 单道极光 · 无反向波纹 · 无黑底 · 干净版
+// ============================================================
 
-<script>
-    // ============================================================
-    // 虞美人风格粒子花
-    // 特征: 4~6片不规则花瓣，自然褶皱，黑心黄蕊，半透明渐变
-    // ============================================================
-    let particles = [];
-    // 花瓣配置: 每片花瓣形状参数不同 (模拟自然)
-    let petals = [
-        { angle: 0.2,   length: 210, width: 130, curl: 0.4, colorHue: [350, 15] },   // 红
-        { angle: 1.1,   length: 195, width: 125, curl: 0.6, colorHue: [358, 22] },   // 朱红
-        { angle: 2.0,   length: 220, width: 140, curl: 0.3, colorHue: [340, 25] },   // 玫红
-        { angle: 3.0,   length: 188, width: 118, curl: 0.7, colorHue: [5, 18] },     // 橙红
-        { angle: 4.2,   length: 205, width: 132, curl: 0.5, colorHue: [352, 20] },    // 红
-        { angle: 5.1,   length: 200, width: 128, curl: 0.45, colorHue: [345, 28] }    // 紫红
-    ];
-    let stamenCount = 1800;      // 花蕊粒子 (黑芯+黄粉)
-    let particlesPerPetal = 2100; // 每片花瓣约2100粒子 → 6片共12600 + 花蕊1800 ≈ 14400粒子
-    
-    // 花朵动态变量
-    let globalRotation = 0;
-    let petalOpenFactor = 1.0;    // 0.5~1.4 控制花瓣展开程度
-    let colorFlow = 0;
-    let flowSpeed = 0.018;
-    let breathePhase = 0;
-    
-    // 手势相关
-    let handLandmarks = null;
-    let gestureType = "none";
-    let lastPinch = false;
-    let colorShiftReq = false;
-    
-    let video, hands, camera;
-    
-    // ------------------------------------------------------------
-    // 粒子类
-    // ------------------------------------------------------------
-    class Particle {
-        constructor(petalIdx, isStamen = false) {
-            this.isStamen = isStamen;
-            if (isStamen) {
-                // 虞美人花蕊: 中心黑紫区域 + 外围黄色花粉点
-                let type = random();
-                if (type < 0.65) {
-                    // 暗色花芯 (深紫/黑)
-                    let r = Math.pow(random(), 1.8) * 38;
-                    let a = random(TWO_PI);
-                    this.x = cos(a) * r;
-                    this.y = sin(a) * r;
-                    this.size = random(1.2, 2.5);
-                    this.colorType = "dark";
-                } else {
-                    // 黄色花粉点 (散布稍外)
-                    let r = 22 + random(40) * random();
-                    let a = random(TWO_PI);
-                    this.x = cos(a) * r;
-                    this.y = sin(a) * r;
-                    this.size = random(2.0, 3.8);
-                    this.colorType = "pollen";
-                }
-                this.originalX = this.x;
-                this.originalY = this.y;
-                this.angleOff = random(TWO_PI);
-                return;
-            }
-            
-            // 花瓣粒子: 在自然花瓣形状内随机分布 (径向衰减 + 边缘卷曲)
-            let p = petals[petalIdx];
-            // 使用 beta 分布让粒子更集中在花瓣中部和边缘，模拟真实花瓣的质感
-            let t = Math.pow(Math.random(), 1.2);  // 0根部 → 1尖端
-            // 径向半径: 根部窄，尖端自然伸长受openFactor影响
-            let maxR = p.length * (0.7 + 0.3 * petalOpenFactor);
-            let r = 25 + t * maxR;
-            // 宽度随半径变化: 中间宽，两端窄 (自然椭圆状)
-            let widthFactor = sin(t * PI) * p.width * (0.8 + 0.4 * petalOpenFactor);
-            // 自然卷曲偏移 (模拟虞美人褶皱)
-            let curlOffset = p.curl * (t * t) * 28 * sin(t * PI * 3);
-            let angleOffset = (random() - 0.5) * widthFactor / (r * 0.7) * 1.2;
-            let baseAngle = p.angle + angleOffset;
-            
-            // 最终坐标 (未旋转)
-            let rad = r + curlOffset * (random() - 0.5);
-            this.x = cos(baseAngle) * rad;
-            this.y = sin(baseAngle) * rad;
-            // 添加额外自然抖动
-            this.x += (random() - 0.5) * 9;
-            this.y += (random() - 0.5) * 9;
-            
-            this.originalX = this.x;
-            this.originalY = this.y;
-            this.petalIdx = petalIdx;
-            this.size = random(1.5, 3.2);
-            // 颜色存储基础色调: 红/橙/玫红范围
-            let hueBase = random(p.colorHue[0], p.colorHue[1]);
-            this.baseHue = hueBase;
-            this.satBase = random(65, 92);
-            this.lightBase = random(55, 82);
-            this.flowPhase = random(TWO_PI);
-        }
-        
-        update(rotation, openFactor, time, flowShift) {
-            if (this.isStamen) {
-                // 花蕊轻微呼吸 + 微旋转
-                let rad = sqrt(this.originalX*this.originalX + this.originalY*this.originalY);
-                let ang = atan2(this.originalY, this.originalX);
-                let newRad = rad * (0.96 + 0.08 * sin(time * 2.5 + rad * 0.2));
-                this.x = cos(ang + time * 0.5) * newRad;
-                this.y = sin(ang + time * 0.5) * newRad;
-                this.currentSize = this.size * (0.7 + 0.5 * sin(time * 4 + this.angleOff));
-                return;
-            }
-            
-            // 花瓣粒子: 根据openFactor调整径向伸长
-            let rad = sqrt(this.originalX*this.originalX + this.originalY*this.originalY);
-            let ang = atan2(this.originalY, this.originalX);
-            let stretch = 0.65 + 0.35 * openFactor;
-            let newRad = rad * stretch;
-            // 流动效果: 沿径向微飘移
-            let flowMove = sin(time * 2.2 + this.flowPhase) * 4.5 * flowSpeed * 25;
-            newRad += flowMove;
-            
-            let finalAng = ang + rotation;
-            this.x = cos(finalAng) * newRad;
-            this.y = sin(finalAng) * newRad;
-            // 呼吸大小
-            let breath = 0.75 + 0.35 * sin(time * 2.8 + rad * 0.05);
-            this.currentSize = this.size * breath;
-        }
-        
-        getColor(flowShift, time) {
-            if (this.isStamen) {
-                if (this.colorType === "dark") {
-                    // 黑紫色花芯
-                    let rCol = 40 + 20 * sin(time * 3 + this.angleOff);
-                    return color(rCol, 20, 40);
-                } else {
-                    // 金黄花粉
-                    let gold = 180 + 75 * sin(time * 5 + this.angleOff);
-                    return color(255, gold, 60);
-                }
-            }
-            // 虞美人花瓣色: 红/橙/玫红 随flowShift微变 + 边缘更亮
-            let rad = sqrt(this.x*this.x + this.y*this.y);
-            let normRad = constrain(rad / 180, 0, 1);
-            let hue = (this.baseHue + flowShift * 8 + normRad * 12) % 360;
-            let sat = this.satBase - normRad * 15;
-            let light = this.lightBase + normRad * 18;
-            // 半透明叠加 (自然通透感)
-            let alphaVal = 0.75 + 0.25 * sin(time * 3 + rad * 0.1);
-            let col = color(`hsla(${hue}, ${sat}%, ${light}%, ${alphaVal})`);
-            return col;
-        }
-    }
-    
-    // 生成所有粒子
-    function createParticles() {
-        let list = [];
-        for (let i = 0; i < petals.length; i++) {
-            for (let j = 0; j < particlesPerPetal; j++) {
-                list.push(new Particle(i, false));
-            }
-        }
-        for (let i = 0; i < stamenCount; i++) {
-            list.push(new Particle(0, true));
-        }
-        return list;
-    }
-    
-    // 手势识别初始化
-    function initHands() {
-        hands = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
-        hands.onResults(onResults);
-        video = document.createElement('video');
-        camera = new Camera(video, { onFrame: async () => { await hands.send({image: video}); }, width: 640, height: 480 });
-        camera.start();
-    }
-    
-    function onResults(results) {
-        if (results.multiHandLandmarks?.length) {
-            handLandmarks = results.multiHandLandmarks[0];
-            analyze(handLandmarks);
-        } else { handLandmarks = null; gestureType = "none"; }
-    }
-    
-    function analyze(lm) {
-        let tips = [4,8,12,16,20], bases = [1,5,9,13,17];
-        let ext = 0;
-        for (let i=0; i<5; i++) if (lm[tips[i]].y < lm[bases[i]].y - 0.03) ext++;
-        if (ext>=4) gestureType = "open";
-        else if (ext<=1) gestureType = "fist";
-        else gestureType = "other";
-        
-        let pinch = dist(lm[4].x, lm[4].y, lm[8].x, lm[8].y) < 0.05;
-        if (pinch && !lastPinch) colorShiftReq = true;
-        lastPinch = pinch;
-        if (pinch) gestureType = "pinch";
-    }
-    
-    function setup() {
-        let canvas = createCanvas(860, 860);
-        canvas.parent('canvasContainer');
-        colorMode(HSL, 360, 100, 100, 1);
-        angleMode(RADIANS);
-        particles = createParticles();
-        document.getElementById('particleCountDisplay').innerHTML = `🌸 粒子总数: ${particles.length.toLocaleString()}  · 虞美人·粒子幻花`;
-        initHands();
-        select('#resetBtn').mousePressed(() => {
-            globalRotation = 0; petalOpenFactor = 1.0; colorFlow = 0; flowSpeed = 0.018;
-        });
-    }
-    
-    function draw() {
-        background(0, 0, 6, 0.2);
-        translate(width/2, height/2);
-        let t = millis() / 1000;
-        breathePhase = t;
-        
-        if (handLandmarks) {
-            let wrist = handLandmarks[0];
-            globalRotation = lerp(globalRotation, map(wrist.x, 0, 1, -PI/2, PI/2), 0.07);
-            if (gestureType === "open") {
-                petalOpenFactor = lerp(petalOpenFactor, 1.35, 0.04);
-                flowSpeed = lerp(flowSpeed, 0.042, 0.02);
-            } else if (gestureType === "fist") {
-                petalOpenFactor = lerp(petalOpenFactor, 0.65, 0.04);
-                flowSpeed = lerp(flowSpeed, 0.008, 0.02);
-            } else {
-                petalOpenFactor = lerp(petalOpenFactor, 1.0, 0.025);
-                flowSpeed = lerp(flowSpeed, 0.022, 0.01);
-            }
-            petalOpenFactor = constrain(petalOpenFactor, 0.55, 1.4);
-            if (colorShiftReq) { colorFlow += 0.4; colorShiftReq = false; }
-        }
-        colorFlow += 0.003;
-        let flowShift = colorFlow;
-        
-        for (let p of particles) {
-            p.update(globalRotation, petalOpenFactor, t, flowSpeed);
-            let col = p.getColor(flowShift, t);
-            fill(col);
-            noStroke();
-            ellipse(p.x, p.y, p.currentSize || p.size, p.currentSize || p.size);
-        }
-        
-        let textDiv = select('#gestureText');
-        let msg = { open:"✋ 花瓣舒展 · 虞美人绽放", fist:"✊ 花瓣轻合 · 花苞微收", pinch:"🤏 花粉流光 · 色彩轻舞", other:"🖐️ 手掌转动花姿", none:"🌱 伸出手来 · 唤醒花朵" };
-        textDiv.html(msg[gestureType] || msg.other);
-    }
-    
-    function windowResized() { resizeCanvas(860, 860); }
-</script>
-</body>
-</html>
+float timeOffset = 0;
+float mouseXnorm = 0.5;
 
- 
+ArrayList<Particle> particles = new ArrayList<Particle>();
+int particleCount = 5000;
+float auroraOffset = 0;
+
+PFont chineseFont;
+
+void setup() {
+  size(900, 600);
+  colorMode(RGB, 255);
+  smooth();
+
+  chineseFont = createFont("Microsoft YaHei", 68);
+  // Mac 用下面这行
+  // chineseFont = createFont("PingFang SC", 68);
+
+  for (int i = 0; i < particleCount; i++) {
+    particles.add(new Particle());
+  }
+}
+
+void draw() {
+  drawBlackGradient();
+  drawAurora();
+  updateParticles();
+  drawTypography();
+
+  timeOffset += 0.8;
+  mouseXnorm = constrain(mouseX / (float)width, 0, 1);
+}
+
+void drawBlackGradient() {
+  for (int i = 0; i <= height; i++) {
+    float inter = map(i, 0, height, 0, 1);
+    float brightness = 5 + 15 * sin(inter * PI);
+    stroke(brightness);
+    line(0, i, width, i);
+  }
+}
+
+// ========== 单道统一方向极光 ==========
+void drawAurora() {
+  pushMatrix();
+  translate(0, height * 0.25);
+
+  // 只保留一组主极光
+  for (int i = 0; i < 10; i++) {
+    float alphaVal = 30 - i * 2.5;
+    float wave = sin(radians(timeOffset * 1.2 + i * 15)) * 18;
+
+    stroke(190 + i * 6, max(8, alphaVal));
+    strokeWeight(2.2 - i * 0.15);
+    noFill();
+
+    beginShape();
+    for (float x = 0; x <= width; x += 10) {
+      float y = 60
+        + sin(radians(x * 0.32 + timeOffset * 1.5)) * 22
+        + wave * sin(radians(x * 0.08));
+
+      y += (mouseXnorm - 0.5) * 35 * sin(radians(x * 0.12));
+      vertex(x, y + i * 12);
+    }
+    endShape();
+  }
+
+  popMatrix();
+}
+
+class Particle {
+  float x, y, vx, vy, size, alpha;
+
+  Particle() {
+    reset();
+  }
+
+  void reset() {
+    x = random(width);
+    y = random(height);
+    vx = random(-0.4, 0.4);
+    vy = random(-0.3, -0.9);
+    size = random(1.0, 2.8);
+    alpha = random(50, 140);
+  }
+
+  void update() {
+    x += vx;
+    y += vy;
+
+    if (x < -20 || x > width + 20 || y < -20 || y > height + 20) {
+      reset();
+      x = random(width);
+      y = height + 10;
+    }
+
+    float dx = x - mouseX;
+    float dy = y - mouseY;
+    float dist = sqrt(dx*dx + dy*dy);
+    if (dist < 60 && dist > 0) {
+      vx += dx / dist * 0.1;
+      vy += dy / dist * 0.1;
+    }
+
+    vx *= 0.99;
+    vy *= 0.99;
+    alpha = 60 + sin(radians(frameCount * 2 + x)) * 35;
+  }
+
+  void draw() {
+    stroke(255, alpha);
+    strokeWeight(size);
+    point(x, y);
+  }
+}
+
+void updateParticles() {
+  for (Particle p : particles) {
+    p.update();
+    p.draw();
+  }
+}
+
+void drawTypography() {
+  resetMatrix();
+
+  float titleShiftY = sin(radians(timeOffset * 1.5)) * 2;
+
+  textAlign(CENTER, CENTER);
+  textFont(chineseFont);
+
+  textSize(68);
+  fill(255);
+  textLeading(80);
+  text("创意编程\n作业展", width/2, height * 0.38 + titleShiftY);
+
+  textSize(15);
+  fill(245, 245, 255, 235);
+  text("CREATIVE CODING EXHIBITION", width/2, height * 0.54);
+
+  float lineWidth = 220 + sin(radians(timeOffset * 2.8)) * 20;
+  stroke(255, 230);
+  strokeWeight(1.5);
+  line(width/2 - lineWidth/2, height * 0.585, width/2 + lineWidth/2, height * 0.585);
+
+  textSize(16);
+  fill(240, 240, 255, 240);
+  textLeading(28);
+  text("2026.04.20 - 04.26\n长沙 · 梅溪湖艺术中心", width/2, height * 0.72);
+
+  textSize(11);
+  fill(200, 200, 220, 190);
+  text("交互设计工作室 ｜ 新媒体艺术系", width/2, height - 48);
+}
