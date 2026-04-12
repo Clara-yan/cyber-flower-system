@@ -3,582 +3,326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>花舞星环 - 手势控制粒子星球 | 蓝紫花海</title>
+    <title>虞美人 · 自然粒子花 | 手势控制</title>
+    <!-- P5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
-            font-family: 'Microsoft YaHei', 'Poppins', 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            background: radial-gradient(circle at 30% 20%, #1a1a2e, #0a0a12);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Georgia', serif;
         }
-        #info {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(0,0,0,0.6);
-            padding: 10px 18px;
-            border-radius: 30px;
-            backdrop-filter: blur(5px);
-            pointer-events: none;
-            z-index: 10;
-            font-size: 14px;
-            letter-spacing: 1px;
-            border-left: 4px solid #a55cff;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        .container {
+            text-align: center;
+            padding: 15px;
         }
-        #status {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            color: #eee;
-            background: rgba(0,0,0,0.6);
-            padding: 8px 16px;
+        canvas {
             border-radius: 20px;
-            font-size: 12px;
-            font-family: monospace;
-            backdrop-filter: blur(4px);
-            pointer-events: none;
-            z-index: 10;
-            text-align: right;
-            border-right: 2px solid #7a4eff;
+            box-shadow: 0 0 40px rgba(180, 70, 120, 0.4);
+            display: block;
+            margin: 0 auto;
         }
-        #hand-canvas {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            width: 160px;
-            height: 120px;
-            border-radius: 12px;
-            border: 2px solid rgba(138, 43, 226, 0.6);
-            box-shadow: 0 0 15px rgba(106, 13, 173, 0.5);
-            object-fit: cover;
-            z-index: 20;
-            opacity: 0.85;
-            transition: 0.3s;
+        .info {
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(10px);
+            border-radius: 60px;
+            padding: 10px 24px;
+            margin-top: 18px;
+            display: inline-block;
+            color: #f0e6ff;
+            font-size: 14px;
+        }
+        .gesture-status {
+            font-weight: bold;
+            color: #ffaa66;
+        }
+        button {
+            background: #c44569;
+            border: none;
+            color: white;
+            padding: 6px 20px;
+            border-radius: 40px;
+            margin-left: 12px;
             cursor: pointer;
         }
-        #hand-canvas:hover {
-            opacity: 1;
-            transform: scale(1.02);
-        }
-        .instruction {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.55);
-            backdrop-filter: blur(8px);
-            padding: 10px 18px;
-            border-radius: 40px;
-            color: #e0b3ff;
-            font-size: 13px;
-            font-weight: 500;
-            pointer-events: none;
-            z-index: 10;
-            font-family: monospace;
-            letter-spacing: 1px;
-            border: 1px solid rgba(170, 100, 255, 0.5);
-            text-shadow: 0 0 5px #9b4dff;
-        }
-        @media (max-width: 600px) {
-            .instruction { font-size: 9px; top: 10px; right: 10px; }
-            #info { font-size: 10px; bottom: 10px; left: 10px; }
-            #hand-canvas { width: 120px; height: 90px; bottom: 10px; left: 10px; }
-        }
-        .loading-tip {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            background: rgba(0,0,0,0.7);
-            padding: 12px 24px;
-            border-radius: 40px;
-            z-index: 100;
-            font-size: 16px;
-            backdrop-filter: blur(8px);
-            pointer-events: none;
-            white-space: nowrap;
-            font-weight: 300;
-            letter-spacing: 2px;
+        .particle-count {
+            font-size: 11px;
+            margin-top: 6px;
+            opacity: 0.8;
         }
     </style>
 </head>
 <body>
-    <div id="info">✨ 花舞星环 | 蓝紫幻境 🌸</div>
-    <div id="status">⚙️ 初始化中...</div>
-    <div class="instruction">✋ 手势控制：移动手掌 → 旋转星球 | 握拳/张开 → 花朵绽放</div>
-    <video id="hand-canvas" autoplay playsinline muted></video>
-    <div id="loading-overlay" class="loading-tip">🌸 加载手势模型中，请稍候...</div>
+<div class="container">
+    <div id="canvasContainer"></div>
+    <div class="info">
+        <span class="gesture-status" id="gestureText">🌱 等待手势</span>
+        <button id="resetBtn">重置花姿</button>
+        <div class="particle-count" id="particleCountDisplay">⚘ 粒子计算中...</div>
+        <div>✋ 张开 → 花瓣舒展 &nbsp;| ✊ 握拳 → 花瓣微合 &nbsp;| 🤏 捏合 → 花粉流光</div>
+        <div>🖐️ 手掌移动 → 花朵轻轻转头</div>
+    </div>
+</div>
 
-    <!-- 引入核心库 -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
-                "@tensorflow-models/handpose": "https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js",
-                "@tensorflow/tfjs-core": "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.15.0/dist/tf-core.min.js",
-                "@tensorflow/tfjs-converter": "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.15.0/dist/tf-converter.min.js",
-                "@tensorflow/tfjs-backend-webgl": "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0/dist/tf-backend-webgl.min.js"
-            }
-        }
-    </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-        
-        // 动态导入 TensorFlow 和 Handpose (因为CDN可能有延迟，确保兼容)
-        async function loadDependencies() {
-            // 等待 tfjs 核心和 handpose 加载 (使用全局变量方式更可靠)
-            return new Promise((resolve) => {
-                if (window.handpose && window.tf) {
-                    resolve();
-                    return;
-                }
-                // 动态加载脚本
-                const loadScript = (src) => {
-                    return new Promise((res, rej) => {
-                        const script = document.createElement('script');
-                        script.src = src;
-                        script.onload = res;
-                        script.onerror = rej;
-                        document.head.appendChild(script);
-                    });
-                };
-                Promise.all([
-                    loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.15.0/dist/tf-core.min.js'),
-                    loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.15.0/dist/tf-converter.min.js'),
-                    loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0/dist/tf-backend-webgl.min.js'),
-                    loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js')
-                ]).then(() => {
-                    resolve();
-                }).catch(e => {
-                    console.warn("CDN加载失败，尝试备用", e);
-                    resolve(); // 即使失败也继续，但不启用识别
-                });
-            });
-        }
-
-        // --- Three.js 场景初始化 ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050b1a);
-        scene.fog = new THREE.FogExp2(0x050b1a, 0.008); // 深邃雾效
-        
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2, 12);
-        camera.lookAt(0, 0, 0);
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
-        
-        // 星芒光晕效果 (简单辉光用加法混合)
-        // 辅助环境点缀: 星空粒子背景
-        const starGeometry = new THREE.BufferGeometry();
-        const starCount = 1200;
-        const starPositions = new Float32Array(starCount * 3);
-        for (let i = 0; i < starCount; i++) {
-            starPositions[i*3] = (Math.random() - 0.5) * 200;
-            starPositions[i*3+1] = (Math.random() - 0.5) * 100;
-            starPositions[i*3+2] = (Math.random() - 0.5) * 80 - 40;
-        }
-        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        const starMaterial = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.12, transparent: true, opacity: 0.6 });
-        const stars = new THREE.Points(starGeometry, starMaterial);
-        scene.add(stars);
-        
-        // 主容器组: 受手势控制旋转
-        const mainGroup = new THREE.Group();
-        scene.add(mainGroup);
-        
-        // --- 创建花朵纹理 (精致花瓣形状) ---
-        function createFlowerTexture(baseColor, glowColor) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64;
-            canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, 64, 64);
-            
-            // 绘制五瓣花
-            const centerX = 32, centerY = 32;
-            const radius = 14;
-            // 花瓣渐变
-            const grad = ctx.createRadialGradient(centerX, centerY, 2, centerX, centerY, 20);
-            grad.addColorStop(0, baseColor);
-            grad.addColorStop(0.7, glowColor);
-            grad.addColorStop(1, 'rgba(100, 50, 200, 0)');
-            
-            for (let i = 0; i < 5; i++) {
-                const angle = (i * 72) * Math.PI / 180;
-                const petalX = centerX + Math.cos(angle) * 13;
-                const petalY = centerY + Math.sin(angle) * 13;
-                ctx.save();
-                ctx.translate(petalX, petalY);
-                ctx.rotate(angle);
-                ctx.beginPath();
-                ctx.ellipse(0, 0, 12, 18, 0, 0, Math.PI * 2);
-                ctx.fillStyle = grad;
-                ctx.fill();
-                ctx.restore();
-            }
-            // 花芯
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 7, 0, Math.PI*2);
-            ctx.fillStyle = '#ffdd99';
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 4, 0, Math.PI*2);
-            ctx.fillStyle = '#ffaa66';
-            ctx.fill();
-            // 光晕外发光
-            ctx.shadowBlur = 0;
-            return new THREE.CanvasTexture(canvas);
-        }
-        
-        // 两种花朵纹理: 蓝色调和紫色调
-        const texBlue = createFlowerTexture('#6a5acd', '#9b6dff');
-        const texPurple = createFlowerTexture('#b77aff', '#df9eff');
-        const texMix = createFlowerTexture('#8a4fff', '#c084fc');
-        
-        // --- 创建粒子几何体: 星球内核 (蓝紫渐变花粒子) ---
-        const coreParticleCount = 2200;
-        const coreGeometry = new THREE.BufferGeometry();
-        const corePositions = new Float32Array(coreParticleCount * 3);
-        const coreColors = new Float32Array(coreParticleCount * 3);
-        
-        // 球形分布 + 轻微噪波 形成星云感
-        for (let i = 0; i < coreParticleCount; i++) {
-            // 球体半径 1.5 ~ 2.4
-            const radius = 1.6 + Math.random() * 0.9;
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            const x = radius * Math.sin(phi) * Math.cos(theta);
-            const y = radius * Math.sin(phi) * Math.sin(theta) * 0.9; // 略微扁平
-            const z = radius * Math.cos(phi);
-            corePositions[i*3] = x;
-            corePositions[i*3+1] = y * 0.8;
-            corePositions[i*3+2] = z;
-            
-            // 颜色: 蓝紫渐变 (根据半径和角度)
-            const mixFactor = (radius - 1.5) / 1.2;
-            const r = 0.4 + mixFactor * 0.3;    // 蓝紫成分
-            const g = 0.3 + mixFactor * 0.2;
-            const b = 0.7 + mixFactor * 0.3;
-            coreColors[i*3] = r;
-            coreColors[i*3+1] = g;
-            coreColors[i*3+2] = b;
-        }
-        coreGeometry.setAttribute('position', new THREE.BufferAttribute(corePositions, 3));
-        coreGeometry.setAttribute('color', new THREE.BufferAttribute(coreColors, 3));
-        
-        const particleMaterial = new THREE.PointsMaterial({ size: 0.18, vertexColors: true, map: texBlue, blending: THREE.AdditiveBlending, transparent: true });
-        const coreParticles = new THREE.Points(coreGeometry, particleMaterial);
-        mainGroup.add(coreParticles);
-        
-        // --- 星环粒子: 花朵形状组成环带，更绚烂 ---
-        const ringCount = 1800;
-        const ringGeometry = new THREE.BufferGeometry();
-        const ringPositions = new Float32Array(ringCount * 3);
-        const ringColorsArr = new Float32Array(ringCount * 3);
-        
-        for (let i = 0; i < ringCount; i++) {
-            // 环半径 2.8 到 4.2，厚度 0.6
-            const r = 2.9 + Math.random() * 1.4;
-            const angle = Math.random() * Math.PI * 2;
-            const yOffset = (Math.random() - 0.5) * 0.8;
-            const x = Math.cos(angle) * r;
-            const z = Math.sin(angle) * r;
-            const y = yOffset + Math.sin(angle * 3) * 0.2;
-            ringPositions[i*3] = x;
-            ringPositions[i*3+1] = y;
-            ringPositions[i*3+2] = z;
-            
-            // 紫罗兰到淡紫色
-            const purpleVal = 0.6 + Math.random() * 0.4;
-            ringColorsArr[i*3] = 0.7 + Math.random()*0.3;   // R偏紫红
-            ringColorsArr[i*3+1] = 0.3 + Math.random()*0.4;
-            ringColorsArr[i*3+2] = 0.8 + Math.random()*0.2;
-        }
-        ringGeometry.setAttribute('position', new THREE.BufferAttribute(ringPositions, 3));
-        ringGeometry.setAttribute('color', new THREE.BufferAttribute(ringColorsArr, 3));
-        const ringMaterial = new THREE.PointsMaterial({ size: 0.2, vertexColors: true, map: texPurple, blending: THREE.AdditiveBlending, transparent: true });
-        const ringParticles = new THREE.Points(ringGeometry, ringMaterial);
-        mainGroup.add(ringParticles);
-        
-        // 额外增加飘浮的花朵粒子群 (动态流光)
-        const floatingCount = 800;
-        const floatGeometry = new THREE.BufferGeometry();
-        const floatPositions = new Float32Array(floatingCount * 3);
-        const floatColorsArr = new Float32Array(floatingCount * 3);
-        for (let i = 0; i < floatingCount; i++) {
-            // 分布在半径 4.5 到 6 的外围
-            const rad = 4.2 + Math.random() * 1.8;
-            const ang = Math.random() * Math.PI * 2;
-            const yLev = (Math.random() - 0.5) * 1.5;
-            floatPositions[i*3] = Math.cos(ang) * rad;
-            floatPositions[i*3+1] = yLev + Math.sin(ang * 2) * 0.4;
-            floatPositions[i*3+2] = Math.sin(ang) * rad;
-            floatColorsArr[i*3] = 0.5 + Math.random()*0.5;
-            floatColorsArr[i*3+1] = 0.2 + Math.random()*0.5;
-            floatColorsArr[i*3+2] = 0.7 + Math.random()*0.3;
-        }
-        floatGeometry.setAttribute('position', new THREE.BufferAttribute(floatPositions, 3));
-        floatGeometry.setAttribute('color', new THREE.BufferAttribute(floatColorsArr, 3));
-        const floatMaterial = new THREE.PointsMaterial({ size: 0.13, vertexColors: true, map: texMix, blending: THREE.AdditiveBlending, transparent: true });
-        const floatParticles = new THREE.Points(floatGeometry, floatMaterial);
-        mainGroup.add(floatParticles);
-        
-        // 添加中心柔和光晕 (点光源)
-        const ambientLight = new THREE.AmbientLight(0x221133);
-        scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xaa66ff, 1.2, 20);
-        pointLight.position.set(1, 1.5, 2);
-        scene.add(pointLight);
-        const backLight = new THREE.PointLight(0x8844cc, 0.8);
-        backLight.position.set(-1, 0, -3);
-        scene.add(backLight);
-        
-        // 简单的闪烁粒子光晕(装饰)
-        const glowGeometry = new THREE.BufferGeometry();
-        const glowVerts = [];
-        for (let i = 0; i < 400; i++) {
-            const rad = 1.2 + Math.random() * 1.2;
-            const theta2 = Math.random() * Math.PI * 2;
-            const phi2 = Math.acos(2 * Math.random() - 1);
-            glowVerts.push(rad * Math.sin(phi2) * Math.cos(theta2), rad * Math.sin(phi2) * Math.sin(theta2), rad * Math.cos(phi2));
-        }
-        glowGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(glowVerts), 3));
-        const glowMat = new THREE.PointsMaterial({ color: 0xaf7aff, size: 0.07, transparent: true, blending: THREE.AdditiveBlending });
-        const glowCore = new THREE.Points(glowGeometry, glowMat);
-        mainGroup.add(glowCore);
-        
-        // --- 手势识别模块 ---
-        let handModel = null;
-        let videoElement = document.getElementById('hand-canvas');
-        let stream = null;
-        let gestureData = {
-            valid: false,
-            palmX: 0.5,    // 0-1 范围
-            palmY: 0.5,
-            spread: 0.5,   // 张开程度 0~1
-            rotationY: 0,
-            rotationX: 0,
-            particleSizeScale: 0.25
-        };
-        
-        // 动态调整粒子大小 (整体效果)
-        let targetSizeCore = 0.18;
-        let targetSizeRing = 0.2;
-        let targetSizeFloat = 0.13;
-        
-        // 辅助: 计算手部张开程度 (基于中指根到指尖距离 / 手腕到中指根距离)
-        function calcSpread(landmarks) {
-            // 使用 wrist(0), middle_finger_mcp(12), middle_finger_tip(8)
-            const wrist = landmarks[0];
-            const middleMcp = landmarks[12];
-            const middleTip = landmarks[8];
-            const wristToMcp = Math.hypot(middleMcp[0]-wrist[0], middleMcp[1]-wrist[1], middleMcp[2]-wrist[2]);
-            const mcpToTip = Math.hypot(middleTip[0]-middleMcp[0], middleTip[1]-middleMcp[1], middleTip[2]-middleMcp[2]);
-            if (wristToMcp < 0.01) return 0.5;
-            let spread = mcpToTip / wristToMcp;
-            return Math.min(0.95, Math.max(0.2, spread * 0.8));
-        }
-        
-        async function initHandTracking() {
-            try {
-                // 请求摄像头
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                videoElement.srcObject = stream;
-                await videoElement.play();
-                document.getElementById('status').innerHTML = '📷 摄像头就绪 | 手势识别中';
-                document.getElementById('loading-overlay')?.remove();
-                
-                // 等待tf准备
-                await loadDependencies();
-                // 使用全局 handpose
-                if (window.handpose) {
-                    handModel = await window.handpose.load();
-                    console.log("Handpose模型加载完成");
-                    document.getElementById('status').innerHTML = '🌸 手势已激活 | 挥动手掌旋转星环';
-                    // 开始检测循环
-                    detectHands();
+<script>
+    // ============================================================
+    // 虞美人风格粒子花
+    // 特征: 4~6片不规则花瓣，自然褶皱，黑心黄蕊，半透明渐变
+    // ============================================================
+    let particles = [];
+    // 花瓣配置: 每片花瓣形状参数不同 (模拟自然)
+    let petals = [
+        { angle: 0.2,   length: 210, width: 130, curl: 0.4, colorHue: [350, 15] },   // 红
+        { angle: 1.1,   length: 195, width: 125, curl: 0.6, colorHue: [358, 22] },   // 朱红
+        { angle: 2.0,   length: 220, width: 140, curl: 0.3, colorHue: [340, 25] },   // 玫红
+        { angle: 3.0,   length: 188, width: 118, curl: 0.7, colorHue: [5, 18] },     // 橙红
+        { angle: 4.2,   length: 205, width: 132, curl: 0.5, colorHue: [352, 20] },    // 红
+        { angle: 5.1,   length: 200, width: 128, curl: 0.45, colorHue: [345, 28] }    // 紫红
+    ];
+    let stamenCount = 1800;      // 花蕊粒子 (黑芯+黄粉)
+    let particlesPerPetal = 2100; // 每片花瓣约2100粒子 → 6片共12600 + 花蕊1800 ≈ 14400粒子
+    
+    // 花朵动态变量
+    let globalRotation = 0;
+    let petalOpenFactor = 1.0;    // 0.5~1.4 控制花瓣展开程度
+    let colorFlow = 0;
+    let flowSpeed = 0.018;
+    let breathePhase = 0;
+    
+    // 手势相关
+    let handLandmarks = null;
+    let gestureType = "none";
+    let lastPinch = false;
+    let colorShiftReq = false;
+    
+    let video, hands, camera;
+    
+    // ------------------------------------------------------------
+    // 粒子类
+    // ------------------------------------------------------------
+    class Particle {
+        constructor(petalIdx, isStamen = false) {
+            this.isStamen = isStamen;
+            if (isStamen) {
+                // 虞美人花蕊: 中心黑紫区域 + 外围黄色花粉点
+                let type = random();
+                if (type < 0.65) {
+                    // 暗色花芯 (深紫/黑)
+                    let r = Math.pow(random(), 1.8) * 38;
+                    let a = random(TWO_PI);
+                    this.x = cos(a) * r;
+                    this.y = sin(a) * r;
+                    this.size = random(1.2, 2.5);
+                    this.colorType = "dark";
                 } else {
-                    console.warn("handpose不可用，使用模拟手势");
-                    document.getElementById('status').innerHTML = '⚠️ 手势模型未加载，使用鼠标模拟';
-                    startMockControl();
+                    // 黄色花粉点 (散布稍外)
+                    let r = 22 + random(40) * random();
+                    let a = random(TWO_PI);
+                    this.x = cos(a) * r;
+                    this.y = sin(a) * r;
+                    this.size = random(2.0, 3.8);
+                    this.colorType = "pollen";
                 }
-            } catch (err) {
-                console.error("摄像头或模型错误:", err);
-                document.getElementById('status').innerHTML = '❌ 摄像头不可用，使用鼠标模拟手势';
-                document.getElementById('loading-overlay')?.remove();
-                startMockControl();
-            }
-        }
-        
-        function detectHands() {
-            if (!handModel || !videoElement || videoElement.readyState !== 4) {
-                requestAnimationFrame(detectHands);
+                this.originalX = this.x;
+                this.originalY = this.y;
+                this.angleOff = random(TWO_PI);
                 return;
             }
-            const process = async () => {
-                if (handModel && videoElement.videoWidth > 0) {
-                    try {
-                        const predictions = await handModel.estimateHands(videoElement);
-                        if (predictions.length > 0) {
-                            const hand = predictions[0];
-                            const landmarks = hand.landmarks;
-                            // 获取手掌中心 (基于手腕和食指根部近似)
-                            const wrist = landmarks[0];
-                            const indexBase = landmarks[5];
-                            const palmCenter = [(wrist[0] + indexBase[0])/2, (wrist[1] + indexBase[1])/2, (wrist[2] + indexBase[2])/2];
-                            // 归一化坐标 (基于视频尺寸映射到 -1..1 但用于旋转)
-                            const normX = palmCenter[0] / videoElement.videoWidth;
-                            const normY = palmCenter[1] / videoElement.videoHeight;
-                            gestureData.palmX = Math.min(0.98, Math.max(0.02, normX));
-                            gestureData.palmY = Math.min(0.98, Math.max(0.02, normY));
-                            // 计算张开程度
-                            const spreadVal = calcSpread(landmarks);
-                            gestureData.spread = spreadVal;
-                            gestureData.valid = true;
-                            
-                            // 映射为旋转角度: X轴范围 -0.8 到 0.8，Y轴范围 -1.2 到 1.2
-                            const targetRotY = (gestureData.palmX - 0.5) * 2.8;
-                            const targetRotX = (gestureData.palmY - 0.5) * 1.5;
-                            gestureData.rotationY = targetRotY;
-                            gestureData.rotationX = targetRotX;
-                            
-                            // 花瓣大小受张开程度影响: 0.15~0.35
-                            const sizeScale = 0.14 + gestureData.spread * 0.28;
-                            targetSizeCore = sizeScale;
-                            targetSizeRing = sizeScale + 0.03;
-                            targetSizeFloat = sizeScale - 0.02;
-                        } else {
-                            gestureData.valid = false;
-                            // 无手时缓慢自动回中
-                            gestureData.rotationY *= 0.98;
-                            gestureData.rotationX *= 0.98;
-                            targetSizeCore = 0.18;
-                            targetSizeRing = 0.2;
-                            targetSizeFloat = 0.13;
-                        }
-                    } catch(e) { console.warn(e); }
-                }
-                requestAnimationFrame(process);
-            };
-            process();
-        }
-        
-        // 鼠标模拟手势 (当摄像头不可用时)
-        function startMockControl() {
-            let mouseX = 0.5, mouseY = 0.5;
-            window.addEventListener('mousemove', (e) => {
-                mouseX = e.clientX / window.innerWidth;
-                mouseY = e.clientY / window.innerHeight;
-                gestureData.palmX = mouseX;
-                gestureData.palmY = mouseY;
-                gestureData.rotationY = (mouseX - 0.5) * 2.5;
-                gestureData.rotationX = (mouseY - 0.5) * 1.5;
-                gestureData.valid = true;
-            });
-            // 滚轮模拟手势张开程度
-            window.addEventListener('wheel', (e) => {
-                let delta = e.deltaY > 0 ? -0.05 : 0.05;
-                gestureData.spread = Math.min(0.95, Math.max(0.2, (gestureData.spread || 0.5) + delta));
-                const sizeScale = 0.14 + gestureData.spread * 0.28;
-                targetSizeCore = sizeScale;
-                targetSizeRing = sizeScale + 0.03;
-                targetSizeFloat = sizeScale - 0.02;
-            });
-            document.getElementById('status').innerHTML = '🖱️ 鼠标模式 | 移动旋转，滚轮改变花大小';
-            gestureData.spread = 0.6;
-        }
-        
-        // 轻柔动画 + 粒子大小动态插值
-        let currentCoreSize = 0.18;
-        let currentRingSize = 0.2;
-        let currentFloatSize = 0.13;
-        
-        // 星环自身缓慢旋转
-        let ringRotationSpeed = 0.002;
-        let timeAcc = 0;
-        
-        // 星空缓慢漂移
-        function animateStars() {
-            stars.rotation.y += 0.0005;
-            stars.rotation.x += 0.0003;
-        }
-        
-        // 主渲染循环
-        function animate() {
-            requestAnimationFrame(animate);
             
-            // 平滑粒子大小更新
-            currentCoreSize += (targetSizeCore - currentCoreSize) * 0.1;
-            currentRingSize += (targetSizeRing - currentRingSize) * 0.1;
-            currentFloatSize += (targetSizeFloat - currentFloatSize) * 0.1;
-            particleMaterial.size = currentCoreSize;
-            ringMaterial.size = currentRingSize;
-            floatMaterial.size = currentFloatSize;
+            // 花瓣粒子: 在自然花瓣形状内随机分布 (径向衰减 + 边缘卷曲)
+            let p = petals[petalIdx];
+            // 使用 beta 分布让粒子更集中在花瓣中部和边缘，模拟真实花瓣的质感
+            let t = Math.pow(Math.random(), 1.2);  // 0根部 → 1尖端
+            // 径向半径: 根部窄，尖端自然伸长受openFactor影响
+            let maxR = p.length * (0.7 + 0.3 * petalOpenFactor);
+            let r = 25 + t * maxR;
+            // 宽度随半径变化: 中间宽，两端窄 (自然椭圆状)
+            let widthFactor = sin(t * PI) * p.width * (0.8 + 0.4 * petalOpenFactor);
+            // 自然卷曲偏移 (模拟虞美人褶皱)
+            let curlOffset = p.curl * (t * t) * 28 * sin(t * PI * 3);
+            let angleOffset = (random() - 0.5) * widthFactor / (r * 0.7) * 1.2;
+            let baseAngle = p.angle + angleOffset;
             
-            // 手势控制组旋转: 平滑跟随
-            if (gestureData.valid) {
-                mainGroup.rotation.y += (gestureData.rotationY - mainGroup.rotation.y) * 0.12;
-                mainGroup.rotation.x += (gestureData.rotationX - mainGroup.rotation.x) * 0.1;
-            } else {
-                mainGroup.rotation.y *= 0.99;
-                mainGroup.rotation.x *= 0.99;
+            // 最终坐标 (未旋转)
+            let rad = r + curlOffset * (random() - 0.5);
+            this.x = cos(baseAngle) * rad;
+            this.y = sin(baseAngle) * rad;
+            // 添加额外自然抖动
+            this.x += (random() - 0.5) * 9;
+            this.y += (random() - 0.5) * 9;
+            
+            this.originalX = this.x;
+            this.originalY = this.y;
+            this.petalIdx = petalIdx;
+            this.size = random(1.5, 3.2);
+            // 颜色存储基础色调: 红/橙/玫红范围
+            let hueBase = random(p.colorHue[0], p.colorHue[1]);
+            this.baseHue = hueBase;
+            this.satBase = random(65, 92);
+            this.lightBase = random(55, 82);
+            this.flowPhase = random(TWO_PI);
+        }
+        
+        update(rotation, openFactor, time, flowShift) {
+            if (this.isStamen) {
+                // 花蕊轻微呼吸 + 微旋转
+                let rad = sqrt(this.originalX*this.originalX + this.originalY*this.originalY);
+                let ang = atan2(this.originalY, this.originalX);
+                let newRad = rad * (0.96 + 0.08 * sin(time * 2.5 + rad * 0.2));
+                this.x = cos(ang + time * 0.5) * newRad;
+                this.y = sin(ang + time * 0.5) * newRad;
+                this.currentSize = this.size * (0.7 + 0.5 * sin(time * 4 + this.angleOff));
+                return;
             }
             
-            // 独立自转: 环粒子自身微旋转，增加灵动感
-            ringParticles.rotation.y += 0.003;
-            floatParticles.rotation.y -= 0.0015;
-            coreParticles.rotation.y += 0.001;
-            glowCore.rotation.x += 0.005;
-            glowCore.rotation.z += 0.003;
+            // 花瓣粒子: 根据openFactor调整径向伸长
+            let rad = sqrt(this.originalX*this.originalX + this.originalY*this.originalY);
+            let ang = atan2(this.originalY, this.originalX);
+            let stretch = 0.65 + 0.35 * openFactor;
+            let newRad = rad * stretch;
+            // 流动效果: 沿径向微飘移
+            let flowMove = sin(time * 2.2 + this.flowPhase) * 4.5 * flowSpeed * 25;
+            newRad += flowMove;
             
-            // 根据手势张开程度改变点光源强度 (花朵绽放感)
-            const intensityTarget = 0.8 + gestureData.spread * 1.2;
-            pointLight.intensity += (intensityTarget - pointLight.intensity) * 0.1;
-            backLight.intensity = 0.5 + gestureData.spread * 0.8;
-            
-            // 让漂浮粒子轻微波动
-            const time = Date.now() * 0.002;
-            floatParticles.rotation.z = Math.sin(time * 0.5) * 0.1;
-            
-            animateStars();
-            
-            // 相机轻微环绕 (非常轻微)
-            camera.position.x += (0 - camera.position.x) * 0.02;
-            camera.position.y += (1.8 - camera.position.y) * 0.02;
-            camera.lookAt(0, 0.5, 0);
-            
-            renderer.render(scene, camera);
+            let finalAng = ang + rotation;
+            this.x = cos(finalAng) * newRad;
+            this.y = sin(finalAng) * newRad;
+            // 呼吸大小
+            let breath = 0.75 + 0.35 * sin(time * 2.8 + rad * 0.05);
+            this.currentSize = this.size * breath;
         }
         
-        // 启动一切
-        initHandTracking();
-        animate();
+        getColor(flowShift, time) {
+            if (this.isStamen) {
+                if (this.colorType === "dark") {
+                    // 黑紫色花芯
+                    let rCol = 40 + 20 * sin(time * 3 + this.angleOff);
+                    return color(rCol, 20, 40);
+                } else {
+                    // 金黄花粉
+                    let gold = 180 + 75 * sin(time * 5 + this.angleOff);
+                    return color(255, gold, 60);
+                }
+            }
+            // 虞美人花瓣色: 红/橙/玫红 随flowShift微变 + 边缘更亮
+            let rad = sqrt(this.x*this.x + this.y*this.y);
+            let normRad = constrain(rad / 180, 0, 1);
+            let hue = (this.baseHue + flowShift * 8 + normRad * 12) % 360;
+            let sat = this.satBase - normRad * 15;
+            let light = this.lightBase + normRad * 18;
+            // 半透明叠加 (自然通透感)
+            let alphaVal = 0.75 + 0.25 * sin(time * 3 + rad * 0.1);
+            let col = color(`hsla(${hue}, ${sat}%, ${light}%, ${alphaVal})`);
+            return col;
+        }
+    }
+    
+    // 生成所有粒子
+    function createParticles() {
+        let list = [];
+        for (let i = 0; i < petals.length; i++) {
+            for (let j = 0; j < particlesPerPetal; j++) {
+                list.push(new Particle(i, false));
+            }
+        }
+        for (let i = 0; i < stamenCount; i++) {
+            list.push(new Particle(0, true));
+        }
+        return list;
+    }
+    
+    // 手势识别初始化
+    function initHands() {
+        hands = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+        hands.onResults(onResults);
+        video = document.createElement('video');
+        camera = new Camera(video, { onFrame: async () => { await hands.send({image: video}); }, width: 640, height: 480 });
+        camera.start();
+    }
+    
+    function onResults(results) {
+        if (results.multiHandLandmarks?.length) {
+            handLandmarks = results.multiHandLandmarks[0];
+            analyze(handLandmarks);
+        } else { handLandmarks = null; gestureType = "none"; }
+    }
+    
+    function analyze(lm) {
+        let tips = [4,8,12,16,20], bases = [1,5,9,13,17];
+        let ext = 0;
+        for (let i=0; i<5; i++) if (lm[tips[i]].y < lm[bases[i]].y - 0.03) ext++;
+        if (ext>=4) gestureType = "open";
+        else if (ext<=1) gestureType = "fist";
+        else gestureType = "other";
         
-        // 窗口适配
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        let pinch = dist(lm[4].x, lm[4].y, lm[8].x, lm[8].y) < 0.05;
+        if (pinch && !lastPinch) colorShiftReq = true;
+        lastPinch = pinch;
+        if (pinch) gestureType = "pinch";
+    }
+    
+    function setup() {
+        let canvas = createCanvas(860, 860);
+        canvas.parent('canvasContainer');
+        colorMode(HSL, 360, 100, 100, 1);
+        angleMode(RADIANS);
+        particles = createParticles();
+        document.getElementById('particleCountDisplay').innerHTML = `🌸 粒子总数: ${particles.length.toLocaleString()}  · 虞美人·粒子幻花`;
+        initHands();
+        select('#resetBtn').mousePressed(() => {
+            globalRotation = 0; petalOpenFactor = 1.0; colorFlow = 0; flowSpeed = 0.018;
+        });
+    }
+    
+    function draw() {
+        background(0, 0, 6, 0.2);
+        translate(width/2, height/2);
+        let t = millis() / 1000;
+        breathePhase = t;
+        
+        if (handLandmarks) {
+            let wrist = handLandmarks[0];
+            globalRotation = lerp(globalRotation, map(wrist.x, 0, 1, -PI/2, PI/2), 0.07);
+            if (gestureType === "open") {
+                petalOpenFactor = lerp(petalOpenFactor, 1.35, 0.04);
+                flowSpeed = lerp(flowSpeed, 0.042, 0.02);
+            } else if (gestureType === "fist") {
+                petalOpenFactor = lerp(petalOpenFactor, 0.65, 0.04);
+                flowSpeed = lerp(flowSpeed, 0.008, 0.02);
+            } else {
+                petalOpenFactor = lerp(petalOpenFactor, 1.0, 0.025);
+                flowSpeed = lerp(flowSpeed, 0.022, 0.01);
+            }
+            petalOpenFactor = constrain(petalOpenFactor, 0.55, 1.4);
+            if (colorShiftReq) { colorFlow += 0.4; colorShiftReq = false; }
+        }
+        colorFlow += 0.003;
+        let flowShift = colorFlow;
+        
+        for (let p of particles) {
+            p.update(globalRotation, petalOpenFactor, t, flowSpeed);
+            let col = p.getColor(flowShift, t);
+            fill(col);
+            noStroke();
+            ellipse(p.x, p.y, p.currentSize || p.size, p.currentSize || p.size);
         }
         
-        // 优雅提示
-        setTimeout(() => {
-            if(document.getElementById('loading-overlay')) document.getElementById('loading-overlay').style.opacity = '0';
-            setTimeout(() => {
-                const el = document.getElementById('loading-overlay');
-                if(el) el.remove();
-            }, 800);
-        }, 2000);
-        
-        // 控制台输出
-        console.log("花舞星环已启动，手势控制旋转星球 + 花朵粒子绽放");
-    </script>
+        let textDiv = select('#gestureText');
+        let msg = { open:"✋ 花瓣舒展 · 虞美人绽放", fist:"✊ 花瓣轻合 · 花苞微收", pinch:"🤏 花粉流光 · 色彩轻舞", other:"🖐️ 手掌转动花姿", none:"🌱 伸出手来 · 唤醒花朵" };
+        textDiv.html(msg[gestureType] || msg.other);
+    }
+    
+    function windowResized() { resizeCanvas(860, 860); }
+</script>
 </body>
 </html>
-
+       
+            
