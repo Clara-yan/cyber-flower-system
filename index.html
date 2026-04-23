@@ -1,160 +1,126 @@
-// ============================================================
-// 第三周作业：创意编程作业展 · 黑白极光动态海报
-// 单道极光 · 无反向波纹 · 无黑底 · 干净版
-// ============================================================
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>摄像头手势控制花朵粒子 p5.js</title>
+    <!-- 稳定可用CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ml5/0.12.2/ml5.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{
+            background:#000;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            padding:20px;
+            color:#fff;
+            font-family:sans-serif;
+        }
+        h1{
+            margin-bottom:20px;
+            color:#ff9ed2;
+        }
+        .tips{
+            margin-top:15px;
+            font-size:16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>手势控制花朵 · 摄像头交互</h1>
+    <div class="tips">允许摄像头 | 食指控花朵 | 手掌开合改变大小 | 粒子跟随</div>
 
-float timeOffset = 0;
-float mouseXnorm = 0.5;
-
-ArrayList<Particle> particles = new ArrayList<Particle>();
-int particleCount = 5000;
-float auroraOffset = 0;
-
-PFont chineseFont;
-
-void setup() {
-  size(900, 600);
-  colorMode(RGB, 255);
-  smooth();
-
-  chineseFont = createFont("Microsoft YaHei", 68);
-  // Mac 用下面这行
-  // chineseFont = createFont("PingFang SC", 68);
-
-  for (int i = 0; i < particleCount; i++) {
-    particles.add(new Particle());
-  }
-}
-
-void draw() {
-  drawBlackGradient();
-  drawAurora();
-  updateParticles();
-  drawTypography();
-
-  timeOffset += 0.8;
-  mouseXnorm = constrain(mouseX / (float)width, 0, 1);
-}
-
-void drawBlackGradient() {
-  for (int i = 0; i <= height; i++) {
-    float inter = map(i, 0, height, 0, 1);
-    float brightness = 5 + 15 * sin(inter * PI);
-    stroke(brightness);
-    line(0, i, width, i);
-  }
-}
-
-// ========== 单道统一方向极光 ==========
-void drawAurora() {
-  pushMatrix();
-  translate(0, height * 0.25);
-
-  // 只保留一组主极光
-  for (int i = 0; i < 10; i++) {
-    float alphaVal = 30 - i * 2.5;
-    float wave = sin(radians(timeOffset * 1.2 + i * 15)) * 18;
-
-    stroke(190 + i * 6, max(8, alphaVal));
-    strokeWeight(2.2 - i * 0.15);
-    noFill();
-
-    beginShape();
-    for (float x = 0; x <= width; x += 10) {
-      float y = 60
-        + sin(radians(x * 0.32 + timeOffset * 1.5)) * 22
-        + wave * sin(radians(x * 0.08));
-
-      y += (mouseXnorm - 0.5) * 35 * sin(radians(x * 0.12));
-      vertex(x, y + i * 12);
-    }
-    endShape();
-  }
-
-  popMatrix();
-}
+<script>
+let video;
+let handPose;
+let hands = [];
+let particles = [];
+let flowerSize = 80;
 
 class Particle {
-  float x, y, vx, vy, size, alpha;
-
-  Particle() {
-    reset();
+  constructor(x,y){
+    this.x = x;
+    this.y = y;
+    this.vx = random(-2,2);
+    this.vy = random(-2,2);
+    this.size = random(5,15);
+    this.c = [random(150,255),random(100,200),random(200,255)];
+    this.life = 255;
   }
-
-  void reset() {
-    x = random(width);
-    y = random(height);
-    vx = random(-0.4, 0.4);
-    vy = random(-0.3, -0.9);
-    size = random(1.0, 2.8);
-    alpha = random(50, 140);
+  update(tx,ty){
+    this.vx = (tx-this.x)*0.05 + this.vx*0.9;
+    this.vy = (ty-this.y)*0.05 + this.vy*0.9;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life -=2;
   }
+  display(){
+    noStroke();
+    fill(this.c[0],this.c[1],this.c[2],this.life);
+    ellipse(this.x,this.y,this.size);
+  }
+  dead(){return this.life<=0;}
+}
 
-  void update() {
-    x += vx;
-    y += vy;
+function setup(){
+  createCanvas(800,600);
+  video = createCapture(VIDEO);
+  video.size(800,600);
+  video.hide();
 
-    if (x < -20 || x > width + 20 || y < -20 || y > height + 20) {
-      reset();
-      x = random(width);
-      y = height + 10;
+  handPose = ml5.handPose(video,{detectionConfidence:0.7},ready);
+  handPose.on("pose",res=>hands=res);
+
+  for(let i=0;i<50;i++){
+    particles.push(new Particle(random(width),random(height)));
+  }
+}
+function ready(){
+  console.log("手势模型加载完成");
+}
+
+function draw(){
+  image(video,0,0);
+  fill(0,80);
+  rect(0,0,width,height);
+
+  if(hands.length>0){
+    let p = hands[0].landmarks;
+    let ix = p[8][0], iy = p[8][1];
+    let dis = dist(p[4][0],p[4][1],p[20][0],p[20][1]);
+    flowerSize = map(dis,40,180,40,160);
+
+    drawFlower(ix,iy,flowerSize);
+
+    if(frameCount%2===0) particles.push(new Particle(ix,iy));
+
+    for(let i=particles.length-1;i>=0;i--){
+      particles[i].update(ix,iy);
+      particles[i].display();
+      if(particles[i].dead()) particles.splice(i,1);
     }
-
-    float dx = x - mouseX;
-    float dy = y - mouseY;
-    float dist = sqrt(dx*dx + dy*dy);
-    if (dist < 60 && dist > 0) {
-      vx += dx / dist * 0.1;
-      vy += dy / dist * 0.1;
-    }
-
-    vx *= 0.99;
-    vy *= 0.99;
-    alpha = 60 + sin(radians(frameCount * 2 + x)) * 35;
-  }
-
-  void draw() {
-    stroke(255, alpha);
-    strokeWeight(size);
-    point(x, y);
+  }else{
+    fill(255);
+    textAlign(CENTER,CENTER);
+    textSize(28);
+    text("请将手放入摄像头画面",width/2,height/2);
   }
 }
 
-void updateParticles() {
-  for (Particle p : particles) {
-    p.update();
-    p.draw();
+function drawFlower(x,y,s){
+  push();
+  translate(x,y);
+  fill(255,100,180);
+  for(let i=0;i<8;i++){
+    rotate(PI/4);
+    ellipse(0,-s/2,s/2,s);
   }
+  fill(255,220,0);
+  ellipse(0,0,s/3,s/3);
+  pop();
 }
-
-void drawTypography() {
-  resetMatrix();
-
-  float titleShiftY = sin(radians(timeOffset * 1.5)) * 2;
-
-  textAlign(CENTER, CENTER);
-  textFont(chineseFont);
-
-  textSize(68);
-  fill(255);
-  textLeading(80);
-  text("创意编程\n作业展", width/2, height * 0.38 + titleShiftY);
-
-  textSize(15);
-  fill(245, 245, 255, 235);
-  text("CREATIVE CODING EXHIBITION", width/2, height * 0.54);
-
-  float lineWidth = 220 + sin(radians(timeOffset * 2.8)) * 20;
-  stroke(255, 230);
-  strokeWeight(1.5);
-  line(width/2 - lineWidth/2, height * 0.585, width/2 + lineWidth/2, height * 0.585);
-
-  textSize(16);
-  fill(240, 240, 255, 240);
-  textLeading(28);
-  text("2026.04.20 - 04.26\n长沙 · 梅溪湖艺术中心", width/2, height * 0.72);
-
-  textSize(11);
-  fill(200, 200, 220, 190);
-  text("交互设计工作室 ｜ 新媒体艺术系", width/2, height - 48);
-}
+</script>
+</body>
+</html>
